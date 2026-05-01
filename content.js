@@ -1,10 +1,12 @@
 const STEP = 0.25;
+const DEFAULT_RATE = 2;
 const MIN_RATE = 0.25;
 const MAX_RATE = 4;
 const INDICATOR_ID = "youtube-arrow-speed-indicator";
 const INDICATOR_HIDE_DELAY_MS = 900;
 
 let indicatorHideTimeout;
+let currentVideo;
 
 function isTypingTarget(target) {
   return (
@@ -76,6 +78,28 @@ function setSpeed(delta) {
   video.playbackRate = nextRate;
   showSpeedIndicator(nextRate);
 }
+
+function applyDefaultSpeed(video) {
+  if (!video || video === currentVideo) return;
+
+  currentVideo = video;
+  video.playbackRate = DEFAULT_RATE;
+}
+
+function watchForVideos() {
+  applyDefaultSpeed(getVideo());
+
+  const observer = new MutationObserver(() => {
+    applyDefaultSpeed(getVideo());
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+watchForVideos();
 
 window.addEventListener(
   "keydown",
