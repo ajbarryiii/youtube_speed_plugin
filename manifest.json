@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Arrow Speed",
+  "version": "0.1.0",
+  "description": "Use up/down arrows on YouTube to control playback speed instead of volume.",
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
