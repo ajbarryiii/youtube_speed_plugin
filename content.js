@@ -7,6 +7,10 @@ const INDICATOR_HIDE_DELAY_MS = 900;
 
 let indicatorHideTimeout;
 let currentVideo;
+let currentVideoContext;
+let desiredRate = DEFAULT_RATE;
+let isAdShowing = false;
+let retryTimeouts = [];
 
 function isTypingTarget(target) {
   return (
@@ -19,6 +23,22 @@ function isTypingTarget(target) {
 
 function getVideo() {
   return document.querySelector("video");
+}
+
+function getVideoContext() {
+  const url = new URL(window.location.href);
+
+  if (url.pathname.startsWith("/shorts/")) {
+    const shortsId = url.pathname.split("/")[2];
+    return shortsId ? `shorts:${shortsId}` : null;
+  }
+
+  const videoId = url.searchParams.get("v");
+  return videoId ? `watch:${videoId}` : null;
+}
+
+function getIsAdShowing() {
+  return document.getElementById("movie_player")?.classList.contains("ad-showing") ?? false;
 }
 
 function getIndicator() {
@@ -75,22 +95,93 @@ function setSpeed(delta) {
     Math.max(MIN_RATE, Math.round((video.playbackRate + delta) * 100) / 100),
   );
 
+  desiredRate = nextRate;
   video.playbackRate = nextRate;
   showSpeedIndicator(nextRate);
 }
 
-function applyDefaultSpeed(video) {
+function clearRetryTimeouts() {
+  retryTimeouts.forEach((timeout) => clearTimeout(timeout));
+  retryTimeouts = [];
+}
+
+function enforceSpeed() {
+  const video = getVideo();
+
+  if (!video || getIsAdShowing()) return;
+
+  if (video.playbackRate !== desiredRate) {
+    video.playbackRate = desiredRate;
+  }
+}
+
+function scheduleSpeedEnforcement() {
+  clearRetryTimeouts();
+  [0, 100, 250, 500, 1000, 1500].forEach((delay) => {
+    retryTimeouts.push(setTimeout(enforceSpeed, delay));
+  });
+}
+
+function handleVideoContextChange() {
+  const nextVideoContext = getVideoContext();
+
+  if (!nextVideoContext || nextVideoContext === currentVideoContext) return;
+
+  currentVideoContext = nextVideoContext;
+  desiredRate = DEFAULT_RATE;
+  scheduleSpeedEnforcement();
+}
+
+function handleRateChange(event) {
+  if (getIsAdShowing()) return;
+
+  if (event.currentTarget.playbackRate !== desiredRate) {
+    scheduleSpeedEnforcement();
+  }
+}
+
+function bindVideo(video) {
   if (!video || video === currentVideo) return;
 
+  if (currentVideo) {
+    currentVideo.removeEventListener("loadedmetadata", scheduleSpeedEnforcement);
+    currentVideo.removeEventListener("canplay", scheduleSpeedEnforcement);
+    currentVideo.removeEventListener("play", scheduleSpeedEnforcement);
+    currentVideo.removeEventListener("playing", scheduleSpeedEnforcement);
+    currentVideo.removeEventListener("ratechange", handleRateChange);
+  }
+
   currentVideo = video;
-  video.playbackRate = DEFAULT_RATE;
+  currentVideo.addEventListener("loadedmetadata", scheduleSpeedEnforcement);
+  currentVideo.addEventListener("canplay", scheduleSpeedEnforcement);
+  currentVideo.addEventListener("play", scheduleSpeedEnforcement);
+  currentVideo.addEventListener("playing", scheduleSpeedEnforcement);
+  currentVideo.addEventListener("ratechange", handleRateChange);
+
+  scheduleSpeedEnforcement();
+}
+
+function handleAdStateChange() {
+  const nextIsAdShowing = getIsAdShowing();
+
+  if (nextIsAdShowing === isAdShowing) return;
+
+  isAdShowing = nextIsAdShowing;
+
+  if (!isAdShowing) {
+    scheduleSpeedEnforcement();
+  }
 }
 
 function watchForVideos() {
-  applyDefaultSpeed(getVideo());
+  handleVideoContextChange();
+  bindVideo(getVideo());
+  handleAdStateChange();
 
   const observer = new MutationObserver(() => {
-    applyDefaultSpeed(getVideo());
+    bindVideo(getVideo());
+    handleVideoContextChange();
+    handleAdStateChange();
   });
 
   observer.observe(document.documentElement, {
@@ -100,6 +191,10 @@ function watchForVideos() {
 }
 
 watchForVideos();
+
+window.addEventListener("yt-navigate-finish", handleVideoContextChange);
+window.addEventListener("yt-page-data-updated", handleVideoContextChange);
+window.addEventListener("popstate", handleVideoContextChange);
 
 window.addEventListener(
   "keydown",
