@@ -3,6 +3,15 @@
   "name": "YouTube Arrow Speed",
   "version": "0.1.0",
   "description": "Use up/down arrows on YouTube to control playback speed instead of volume.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "youtube-arrow-speed@ajbarryiii.github.io",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
   "content_scripts": [
     {
       "matches": ["*://www.youtube.com/*"],
